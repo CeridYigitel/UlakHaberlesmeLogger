@@ -7,25 +7,23 @@
 #include <ctime>
 void LoggerTest(int thread_index,int duration_in_seconds){
 	time_t start_time=time(nullptr);
-
+	int thread_sleep_ms=10;
 	while(true){
 		if(time(nullptr)-start_time > duration_in_seconds)
 			break;
 		Logger::Log(static_cast<LogType>(rand() % 3),"Logging from thread: %d",thread_index);
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		std::this_thread::sleep_for(std::chrono::milliseconds(thread_sleep_ms));
 	}
 }
-
 void SetSWVersion(unsigned int new_major,unsigned int new_minor,unsigned int new_patch){
-	struct SWVersion sw;
-	sw.major_=new_major;
-	sw.minor_=new_minor;
-	sw.patch_=new_patch;
-	Logger::WriteHeader(&sw);
+struct SWVersion sw;
+sw.major_=new_major;
+sw.minor_=new_minor;
+sw.patch_=new_patch;
+Logger::WriteHeader(sw);
 }
-
 int main(){
-	static int thread_run_duration=1;
+	static int thread_run_duration=30;
 	static int number_of_threads=3;
 
 	Logger::EnableFileOutput("/home/cerid/eclipse-workspace/LoggerTest/log.txt");
