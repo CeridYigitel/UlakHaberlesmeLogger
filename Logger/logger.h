@@ -12,12 +12,26 @@
 #include <string>
 #include <ctime>
 #include <mutex>
+#include <sstream>
+#include <iostream>
+#include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <string.h>
 
 //Enum holds the log types.
 enum LogType
 {
 	Info, Warning, Error
 };
+
+enum OutputType{
+
+	Default=0,Stdoutput=1, File=2, Udp=4
+};
+
 //Software version that we need for header.
 struct SWVersion{
 	unsigned int major_;
@@ -29,9 +43,15 @@ struct SWVersion{
 class Logger
 {
 public:
+	void EnableUdpOutput(unsigned short sin_port=8080,unsigned long s_addr=INADDR_ANY);
+
 	void EnableFileOutput(const char* new_filepath="log.txt");
 
 	void WriteHeader(SWVersion &sw);
+
+	void Init(OutputType stdoutput=Default,OutputType file=Default,OutputType udp=Default
+			, const char* new_filepath="/var/log/loggerclass.log"
+			, unsigned short sin_port=8080,unsigned long s_addr=INADDR_ANY);
 
 	//This method writes current time in UTC format.
 	//Writes logs with given parameters.
@@ -50,27 +70,32 @@ public:
 			logtype="Error";
 			break;
 		}
-
+		std::lock_guard<std::mutex> lock(log_mutex_);
 		std::time_t current_time = std::time(0);
 		std::tm* timestamp = std::gmtime(&current_time);
-		char buffer[80];
-		strftime(buffer, 80, "%c", timestamp);
+		char timestamp_string[80];
+		strftime(timestamp_string, 80, "%c", timestamp);
 
-		log_mutex_.lock();
-		printf("%s\t", buffer);
-		printf("[%s]  ",logtype.c_str());
-		printf(message, args...);
-		printf("\n");
-		log_mutex_.unlock();
+		std::string str;
+		str.append(timestamp_string);
+		str.append("\t");
+		str.append(logtype.c_str());
+		str.append("\t");
+		str.append(message);
+		str.append(" ");
+		str.append(stringify(args...));
+		str.append("\n");
 
+		printf("%s",str.c_str());
 		if (file)
 		{
-			log_mutex_.lock();
-			fprintf(file, "%s\t", buffer);
-			fprintf(file,"[%s]  ",logtype.c_str());
-			fprintf(file, message, args...);
-			fprintf(file, "\n");
-			log_mutex_.unlock();
+			fprintf(file,"%s",str.c_str());
+		}
+		if(udp){
+			sendto(sockfd, (const char *)str.c_str(), strlen(str.c_str()),
+				MSG_CONFIRM, (const struct sockaddr *) &servaddr,
+					sizeof(servaddr));
+
 		}
 	}
 
@@ -80,6 +105,9 @@ private:
 	const char* filepath = nullptr;
 	FILE* file = nullptr;
 	std::mutex log_mutex_;
+	bool udp=false;
+	int sockfd;
+	struct sockaddr_in servaddr;
 
 	//We have singleton design pattern, there will be just 1 instance, class objects should not be created outside class.
 	Logger() {
@@ -92,6 +120,22 @@ private:
 	}
 
 	void FreeFile();
+
+	template<typename T>
+	std::string toString(T value)
+	{
+	    std::ostringstream oss;
+	    oss << value;
+	    return oss.str();
+	}
+
+	std::string merge(std::initializer_list<std::string> strList);
+
+	template< typename ... Args >
+	std::string stringify(const Args& ... args)
+	{
+	    return merge({toString(args)...});
+	}
 };
 
 #endif /* LOGGER_H_ */
