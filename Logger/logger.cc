@@ -11,26 +11,40 @@
 #include <thread>
 #include <chrono>
 #include <string>
+#include<json-c/json.h>
 
-void Logger::Init(OutputType stdoutput,OutputType file,OutputType udp , const char* new_filepath , unsigned short sin_port,unsigned long s_addr){
-
-	if(Stdoutput &(stdoutput|file|udp)){
+void Logger::Init(unsigned int output_type){
+	output_type_=output_type;
+	if(Stdoutput &output_type_){
 		printf("konsol ciktisi aktif\n");
 	}
 
-	if((File&(stdoutput|file|udp))>>1){
+	if((File& (output_type_))>>1){
 		printf("file ciktisi aktif\n");
 		EnableFileOutput();
 	}
 
-	if((Udp &(stdoutput|file|udp))>>2){
+	if((Udp &(output_type_))>>2){
 		printf("udp ciktisi aktif\n");
 		EnableUdpOutput();
 	}
 }
 
 
-void Logger::EnableUdpOutput(unsigned short sin_port,unsigned long s_addr){
+void Logger::EnableUdpOutput(){
+
+	FILE *fp;
+	char buffer[1024];
+	struct json_object *parsed_json;
+	struct json_object *Port,*ServerIp;
+
+	fp = fopen("/home/cerid/eclipse-workspace/Logger/Settings.json","r");
+		fread(buffer, 1024, 1, fp);
+		fclose(fp);
+	parsed_json = json_tokener_parse(buffer);
+
+	json_object_object_get_ex(parsed_json, "Port", &Port);
+	json_object_object_get_ex(parsed_json, "ServerIp", &ServerIp);
 
 	// Creating socket file descriptor
 	if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) {
@@ -47,25 +61,35 @@ void Logger::EnableUdpOutput(unsigned short sin_port,unsigned long s_addr){
 
 	// Filling server information
 	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = htons(sin_port);
-	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	udp=true;
-
-
+	servaddr.sin_port = htons(json_object_get_int(Port));
+	servaddr.sin_addr.s_addr = inet_addr(json_object_get_string(ServerIp));
 }
 
 //To be able writing to a file, opens file for output at the end of a file.
-void Logger::EnableFileOutput(const char* new_filepath){
-	get_instance().filepath=new_filepath;
-	if (file)
-	{
-		fclose(file);
-	}
-	file = fopen(filepath, "a");
+void Logger::EnableFileOutput(){
+	FILE *fp;
+	char buffer[1024];
+	struct json_object *parsed_json;
+	struct json_object *Filepath;
 
-	if (!file)
+	fp = fopen("Settings.json","r");
+		fread(buffer, 1024, 1, fp);
+		fclose(fp);
+	parsed_json = json_tokener_parse(buffer);
+
+	json_object_object_get_ex(parsed_json, "Filepath", &Filepath);
+
+	get_instance().filepath = json_object_get_string(Filepath);
+
+	if (get_instance().file != 0)
 	{
-		printf("Logger: Failed to open file at %s", filepath);
+		fclose(get_instance().file);
+	}
+	get_instance().file = fopen(get_instance().filepath, "a");
+
+	if (get_instance().file == 0)
+	{
+		printf("Logger: Failed to open file at %s", get_instance().filepath);
 	}
 }
 
@@ -75,16 +99,15 @@ void Logger::EnableFileOutput(const char* new_filepath){
 void Logger::WriteHeader(SWVersion &sw){
 	std::time_t current_time = std::time(0);
 	std::tm* timestamp = std::gmtime(&current_time);
-	char buffer[80];
-	strftime(buffer, 80, "%c", timestamp);
+	char timestamp_string[80];
+	strftime(timestamp_string, 80, "%c", timestamp);
 
-	printf("\n\n>>==== Date (UTC): %s\nVersion: %u.%u.%u ====<<\n", buffer,sw.major_,sw.minor_,sw.patch_);
-
-	if (file)
-	{
-		fprintf(file,"\n\n>>==== Date (UTC): %s\nVersion: %u.%u.%u ====<<\n", buffer,sw.major_,sw.minor_,sw.patch_);
+	if(Stdoutput &output_type_){
+		printf("\n\n>>==== Date (UTC): %s\nVersion: %u.%u.%u ====<<\n", timestamp_string,sw.major_,sw.minor_,sw.patch_);
 	}
-
+	if((File& (output_type_))>>1 && file){
+		fprintf(file,"\n\n>>==== Date (UTC): %s\nVersion: %u.%u.%u ====<<\n", timestamp_string,sw.major_,sw.minor_,sw.patch_);
+	}
 }
 
 //Returns a static logger instance.
@@ -102,13 +125,14 @@ void Logger::FreeFile(){
 		}
 }
 
-std::string Logger::merge(std::initializer_list<std::string> strList)
+
+std::string Logger::Merge(std::initializer_list<std::string> strList)
 	{
-	    std::string ret = "";
-	    for (std::string s : strList) {
-	        ret += s;
-	    }
-	    return ret;
+	std::string ret = "";
+	for (std::string s : strList) {
+		ret += s;
+	}
+	return ret;
 	}
 
 

@@ -29,7 +29,7 @@ enum LogType
 
 enum OutputType{
 
-	Default=0,Stdoutput=1, File=2, Udp=4
+	Stdoutput=1, File=2, Udp=4
 };
 
 //Software version that we need for header.
@@ -43,15 +43,13 @@ struct SWVersion{
 class Logger
 {
 public:
-	void EnableUdpOutput(unsigned short sin_port=8080,unsigned long s_addr=INADDR_ANY);
+	void EnableUdpOutput();
 
-	void EnableFileOutput(const char* new_filepath="log.txt");
+	void EnableFileOutput();
 
 	void WriteHeader(SWVersion &sw);
 
-	void Init(OutputType stdoutput=Default,OutputType file=Default,OutputType udp=Default
-			, const char* new_filepath="/var/log/loggerclass.log"
-			, unsigned short sin_port=8080,unsigned long s_addr=INADDR_ANY);
+	void Init(unsigned int output_type);
 
 	//This method writes current time in UTC format.
 	//Writes logs with given parameters.
@@ -83,19 +81,18 @@ public:
 		str.append("\t");
 		str.append(message);
 		str.append(" ");
-		str.append(stringify(args...));
+		str.append(Stringify(args...));
 		str.append("\n");
-
-		printf("%s",str.c_str());
-		if (file)
-		{
+		if(Stdoutput &output_type_){
+			printf("%s",str.c_str());
+		}
+		if((File& (output_type_))>>1 && file){
 			fprintf(file,"%s",str.c_str());
 		}
-		if(udp){
+		if((Udp &(output_type_))>>2){
 			sendto(sockfd, (const char *)str.c_str(), strlen(str.c_str()),
 				MSG_CONFIRM, (const struct sockaddr *) &servaddr,
-					sizeof(servaddr));
-
+				sizeof(servaddr));
 		}
 	}
 
@@ -105,9 +102,9 @@ private:
 	const char* filepath = nullptr;
 	FILE* file = nullptr;
 	std::mutex log_mutex_;
-	bool udp=false;
 	int sockfd;
 	struct sockaddr_in servaddr;
+	unsigned int output_type_;
 
 	//We have singleton design pattern, there will be just 1 instance, class objects should not be created outside class.
 	Logger() {
@@ -129,12 +126,12 @@ private:
 	    return oss.str();
 	}
 
-	std::string merge(std::initializer_list<std::string> strList);
+	std::string Merge(std::initializer_list<std::string> strList);
 
 	template< typename ... Args >
-	std::string stringify(const Args& ... args)
+	std::string Stringify(const Args& ... args)
 	{
-	    return merge({toString(args)...});
+	    return Merge({toString(args)...});
 	}
 };
 
