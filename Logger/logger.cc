@@ -12,84 +12,69 @@
 #include <chrono>
 #include <string>
 #include<json-c/json.h>
-
-void Logger::Init(unsigned int output_type){
-	output_type_=output_type;
-	if(Stdoutput &output_type_){
-		printf("konsol ciktisi aktif\n");
-	}
-
-	if((File& (output_type_))>>1){
-		printf("file ciktisi aktif\n");
-		EnableFileOutput();
-	}
-
-	if((Udp &(output_type_))>>2){
-		printf("udp ciktisi aktif\n");
-		EnableUdpOutput();
-	}
-}
-
-
-void Logger::EnableUdpOutput(){
-
+//Port-ServerIp-Filepath (for now) stands inside Settings.json file, this function reads and parses the json file.
+void Logger::ReadJson(){
 	FILE *fp;
 	char buffer[1024];
 	struct json_object *parsed_json;
-	struct json_object *Port,*ServerIp;
-
+	//This file path must be your "Settings.json" file path.
 	fp = fopen("/home/cerid/eclipse-workspace/Logger/Settings.json","r");
 		fread(buffer, 1024, 1, fp);
 		fclose(fp);
 	parsed_json = json_tokener_parse(buffer);
 
-	json_object_object_get_ex(parsed_json, "Port", &Port);
-	json_object_object_get_ex(parsed_json, "ServerIp", &ServerIp);
+	json_object_object_get_ex(parsed_json, "Port", &pport_);
+	json_object_object_get_ex(parsed_json, "ServerIp", &pserverip_);
+	json_object_object_get_ex(parsed_json, "Filepath", &pfilepath_json_);
+}
 
+void Logger::Init(unsigned int output_type){
+	output_type_=output_type;
+	ReadJson();
+
+	if((kFile& (output_type_))>>1){
+		EnableFileOutput();
+	}
+
+	if((kUdp &(output_type_))>>2){
+		EnableUdpOutput();
+	}
+}
+
+//To be able writing to UDP socket.
+void Logger::EnableUdpOutput(){
 	// Creating socket file descriptor
-	if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) {
+	if ( (sockfd_ = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) {
 		perror("socket creation failed");
 		exit(EXIT_FAILURE);
 	}
 	int opt = 1;
-	if( setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, (char *)&opt, sizeof(opt)) < 0 )
+	if( setsockopt(sockfd_, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, (char *)&opt, sizeof(opt)) < 0 )
 	{
 	    perror("setsockopt");
 	    exit(EXIT_FAILURE);
 	}
-	memset(&servaddr, 0, sizeof(servaddr));
+	memset(&servaddr_, 0, sizeof(servaddr_));
 
 	// Filling server information
-	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = htons(json_object_get_int(Port));
-	servaddr.sin_addr.s_addr = inet_addr(json_object_get_string(ServerIp));
+	servaddr_.sin_family = AF_INET;
+	servaddr_.sin_port = htons(json_object_get_int(pport_));
+	servaddr_.sin_addr.s_addr = inet_addr(json_object_get_string(pserverip_));
 }
 
 //To be able writing to a file, opens file for output at the end of a file.
 void Logger::EnableFileOutput(){
-	FILE *fp;
-	char buffer[1024];
-	struct json_object *parsed_json;
-	struct json_object *Filepath;
+	get_instance().pfilepath_ = json_object_get_string(pfilepath_json_);
 
-	fp = fopen("Settings.json","r");
-		fread(buffer, 1024, 1, fp);
-		fclose(fp);
-	parsed_json = json_tokener_parse(buffer);
-
-	json_object_object_get_ex(parsed_json, "Filepath", &Filepath);
-
-	get_instance().filepath = json_object_get_string(Filepath);
-
-	if (get_instance().file != 0)
+	if (get_instance().pfile_ != 0)
 	{
-		fclose(get_instance().file);
+		fclose(get_instance().pfile_);
 	}
-	get_instance().file = fopen(get_instance().filepath, "a");
+	get_instance().pfile_ = fopen(get_instance().pfilepath_, "a");
 
-	if (get_instance().file == 0)
+	if (get_instance().pfile_ == 0)
 	{
-		printf("Logger: Failed to open file at %s", get_instance().filepath);
+		printf("Logger: Failed to open file at %s", get_instance().pfilepath_);
 	}
 }
 
@@ -102,11 +87,11 @@ void Logger::WriteHeader(SWVersion &sw){
 	char timestamp_string[80];
 	strftime(timestamp_string, 80, "%c", timestamp);
 
-	if(Stdoutput &output_type_){
-		printf("\n\n>>==== Date (UTC): %s\nVersion: %u.%u.%u ====<<\n", timestamp_string,sw.major_,sw.minor_,sw.patch_);
+	if(kStdoutput &output_type_){
+		printf("\n\n>>==== Date (UTC): %s\nVersion: %u.%u.%u ====<<\n", timestamp_string,sw.major,sw.minor,sw.patch);
 	}
-	if((File& (output_type_))>>1 && file){
-		fprintf(file,"\n\n>>==== Date (UTC): %s\nVersion: %u.%u.%u ====<<\n", timestamp_string,sw.major_,sw.minor_,sw.patch_);
+	if((kFile& (output_type_))>>1 && pfile_){
+		fprintf(pfile_,"\n\n>>==== Date (UTC): %s\nVersion: %u.%u.%u ====<<\n", timestamp_string,sw.major,sw.minor,sw.patch);
 	}
 }
 
@@ -118,14 +103,14 @@ Logger& Logger::get_instance(){
 
 //Frees up the file pointer when program ends.
 void Logger::FreeFile(){
-	if (file)
+	if (pfile_)
 		{
-			fclose(file);
-			file = nullptr;
+			fclose(pfile_);
+			pfile_ = nullptr;
 		}
 }
 
-
+//Merge given string list.
 std::string Logger::Merge(std::initializer_list<std::string> strList)
 	{
 	std::string ret = "";

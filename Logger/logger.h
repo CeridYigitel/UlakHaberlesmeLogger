@@ -21,28 +21,32 @@
 #include <unistd.h>
 #include <string.h>
 
-//Enum holds the log types.
+#include<json-c/json.h>
+
+//This enum holds the log types.
 enum LogType
 {
 	Info, Warning, Error
 };
-
+//This enum holds Output types.
 enum OutputType{
 
-	Stdoutput=1, File=2, Udp=4
+	kStdoutput=1, kFile=2, kUdp=4
 };
 
 //Software version that we need for header.
 struct SWVersion{
-	unsigned int major_;
-	unsigned int minor_;
-	unsigned int patch_;
+	unsigned int major;
+	unsigned int minor;
+	unsigned int patch;
 };
 
 
 class Logger
 {
 public:
+	void ReadJson();
+
 	void EnableUdpOutput();
 
 	void EnableFileOutput();
@@ -56,16 +60,16 @@ public:
 	//Checks is there any file to write log, if there is,it also writes in the file.
 	template<typename... Args>
 	void Log(LogType type, const char* message, Args... args){
-		std::string logtype;
+		std::string log_type;
 		switch(type){
 		case Info:
-			logtype="Info";
+			log_type="Info";
 			break;
 		case Warning:
-			logtype="Warning";
+			log_type="Warning";
 			break;
 		case Error:
-			logtype="Error";
+			log_type="Error";
 			break;
 		}
 		std::lock_guard<std::mutex> lock(log_mutex_);
@@ -77,34 +81,35 @@ public:
 		std::string str;
 		str.append(timestamp_string);
 		str.append("\t");
-		str.append(logtype.c_str());
+		str.append(log_type.c_str());
 		str.append("\t");
 		str.append(message);
 		str.append(" ");
 		str.append(Stringify(args...));
 		str.append("\n");
-		if(Stdoutput &output_type_){
+		if(kStdoutput &output_type_){
 			printf("%s",str.c_str());
 		}
-		if((File& (output_type_))>>1 && file){
-			fprintf(file,"%s",str.c_str());
+		if((kFile& (output_type_))>>1 && pfile_){
+			fprintf(pfile_,"%s",str.c_str());
 		}
-		if((Udp &(output_type_))>>2){
-			sendto(sockfd, (const char *)str.c_str(), strlen(str.c_str()),
-				MSG_CONFIRM, (const struct sockaddr *) &servaddr,
-				sizeof(servaddr));
+		if((kUdp &(output_type_))>>2){
+			sendto(sockfd_, (const char *)str.c_str(), strlen(str.c_str()),
+				MSG_CONFIRM, (const struct sockaddr *) &servaddr_,
+				sizeof(servaddr_));
 		}
 	}
 
 	static Logger& get_instance();
 
 private:
-	const char* filepath = nullptr;
-	FILE* file = nullptr;
+	const char* pfilepath_ = nullptr;
+	FILE* pfile_ = nullptr;
 	std::mutex log_mutex_;
-	int sockfd;
-	struct sockaddr_in servaddr;
+	int sockfd_;
+	struct sockaddr_in servaddr_;
 	unsigned int output_type_;
+	struct json_object *pport_,*pserverip_,*pfilepath_json_;
 
 	//We have singleton design pattern, there will be just 1 instance, class objects should not be created outside class.
 	Logger() {
@@ -117,7 +122,7 @@ private:
 	}
 
 	void FreeFile();
-
+	//Converts the given value to string.
 	template<typename T>
 	std::string toString(T value)
 	{
@@ -128,6 +133,7 @@ private:
 
 	std::string Merge(std::initializer_list<std::string> strList);
 
+	//Calls Merge for all arguments.
 	template< typename ... Args >
 	std::string Stringify(const Args& ... args)
 	{

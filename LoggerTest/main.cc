@@ -9,7 +9,7 @@ void LoggerTest(int thread_index,int duration_in_seconds){
 	time_t start_time=time(nullptr);
 	int thread_sleep_ms=10;
 
-	while(false){
+	while(true){
 		if(time(nullptr)-start_time > duration_in_seconds)
 			break;
 		Logger::get_instance().Log(static_cast<LogType>(rand() % 3),"Logging from thread:",thread_index);
@@ -19,9 +19,10 @@ void LoggerTest(int thread_index,int duration_in_seconds){
 
 void SetSWVersion(unsigned int new_major,unsigned int new_minor,unsigned int new_patch){
 	struct SWVersion sw;
-	sw.major_=new_major;
-	sw.minor_=new_minor;
-	sw.patch_=new_patch;
+	sw.major=new_major;
+	sw.minor=new_minor;
+	sw.patch=new_patch;
+
 	Logger::get_instance().WriteHeader(sw);
 }
 
@@ -30,10 +31,10 @@ int main(){
 	static int number_of_threads=10;
 	unsigned int output_type=7;
 
-	//Logger::EnableFileOutput("/home/cerid/eclipse-workspace/LoggerDeneme/log.txt");
 	Logger::get_instance().Init(output_type);
+
 	SetSWVersion(5,6,3);
-	//Logger::get_instance().EnableUdpOutput();
+
 	std::thread threads[number_of_threads];
 
 	for(int t_indice=0;t_indice<number_of_threads;t_indice++){
