@@ -1,5 +1,7 @@
 {
-"Port": 8082,
-"ServerIp": "127.0.0.2",
-"Filepath": "/var/log/loggerclass.log"
+"UdpPort": 8082,
+"UdpServerIp": "127.0.0.2",
+"Filepath": "/var/log/loggerclass.log",
+"TcpPort": 8084,
+"TcpServerIp": "127.0.0.1"
 }

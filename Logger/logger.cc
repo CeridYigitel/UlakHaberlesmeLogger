@@ -23,9 +23,11 @@ void Logger::ReadJson(){
 		fclose(fp);
 	parsed_json = json_tokener_parse(buffer);
 
-	json_object_object_get_ex(parsed_json, "Port", &pport_);
-	json_object_object_get_ex(parsed_json, "ServerIp", &pserverip_);
+	json_object_object_get_ex(parsed_json, "UdpPort", &pudp_port_);
+	json_object_object_get_ex(parsed_json, "UdpServerIp", &pudp_serverip_);
 	json_object_object_get_ex(parsed_json, "Filepath", &pfilepath_json_);
+	json_object_object_get_ex(parsed_json, "TcpPort", &ptcp_port_);
+	json_object_object_get_ex(parsed_json, "TcpServerIp", &ptcp_serverip_);
 }
 
 void Logger::Init(unsigned int output_type){
@@ -39,27 +41,30 @@ void Logger::Init(unsigned int output_type){
 	if((kUdp &(output_type_))>>2){
 		EnableUdpOutput();
 	}
+	if((kTcp &(output_type_))>>3){
+		EnableTcpOutput();
+	}
 }
 
 //To be able writing to UDP socket.
 void Logger::EnableUdpOutput(){
 	// Creating socket file descriptor
-	if ( (sockfd_ = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) {
+	if ( (udp_sockfd_ = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) {
 		perror("socket creation failed");
 		exit(EXIT_FAILURE);
 	}
 	int opt = 1;
-	if( setsockopt(sockfd_, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, (char *)&opt, sizeof(opt)) < 0 )
+	if( setsockopt(udp_sockfd_, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, (char *)&opt, sizeof(opt)) < 0 )
 	{
 	    perror("setsockopt");
 	    exit(EXIT_FAILURE);
 	}
-	memset(&servaddr_, 0, sizeof(servaddr_));
+	memset(&udp_servaddr_, 0, sizeof(udp_servaddr_));
 
 	// Filling server information
-	servaddr_.sin_family = AF_INET;
-	servaddr_.sin_port = htons(json_object_get_int(pport_));
-	servaddr_.sin_addr.s_addr = inet_addr(json_object_get_string(pserverip_));
+	udp_servaddr_.sin_family = AF_INET;
+	udp_servaddr_.sin_port = htons(json_object_get_int(pudp_port_));
+	udp_servaddr_.sin_addr.s_addr = inet_addr(json_object_get_string(pudp_serverip_));
 }
 
 //To be able writing to a file, opens file for output at the end of a file.
@@ -76,6 +81,52 @@ void Logger::EnableFileOutput(){
 	{
 		printf("Logger: Failed to open file at %s", get_instance().pfilepath_);
 	}
+}
+
+void Logger::EnableTcpOutput(){
+    unsigned int len;
+    struct sockaddr_in servaddr, cli;
+    // socket create and verification
+    tcp_sockfd_ = socket(AF_INET, SOCK_STREAM, 0);
+    if (tcp_sockfd_ == -1) {
+        printf("socket creation failed...\n");
+        exit(0);
+    }
+    else
+        printf("Socket successfully created..\n");
+    bzero(&servaddr, sizeof(servaddr));
+
+    // assign IP, PORT
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = inet_addr(json_object_get_string(ptcp_serverip_));
+    servaddr.sin_port = htons(json_object_get_int(ptcp_port_));
+
+    // Binding newly created socket to given IP and verification
+    if ((bind(tcp_sockfd_, (struct sockaddr *)&servaddr, sizeof(servaddr))) != 0) {
+        printf("socket bind failed...\n");
+        exit(0);
+    }
+    else
+        printf("Socket successfully binded..\n");
+
+    // Now server is ready to listen and verification
+    if ((listen(tcp_sockfd_, 5)) != 0) {
+        printf("Listen failed...\n");
+        exit(0);
+    }
+    else
+        printf("Server listening..\n");
+    len = sizeof(cli);
+
+    // Accept the data packet from client and verification
+    tcp_connfd_ = accept(tcp_sockfd_, (struct sockaddr *)&cli, &len);
+    if (tcp_connfd_ < 0) {
+        printf("server acccept failed...\n");
+        exit(0);
+    }
+    else
+        printf("server acccept the client...\n");
+
 }
 
 //This method writes current time in UTC format.
@@ -119,7 +170,3 @@ std::string Logger::Merge(std::initializer_list<std::string> strList)
 	}
 	return ret;
 	}
-
-
-
-

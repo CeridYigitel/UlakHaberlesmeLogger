@@ -20,6 +20,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <string.h>
+#include <cstring>
 
 #include<json-c/json.h>
 
@@ -31,7 +32,7 @@ enum LogType
 //This enum holds Output types.
 enum OutputType{
 
-	kStdoutput=1, kFile=2, kUdp=4
+	kStdoutput=1, kFile=2, kUdp=4, kTcp=8
 };
 
 //Software version that we need for header.
@@ -54,6 +55,8 @@ public:
 	void WriteHeader(SWVersion &sw);
 
 	void Init(unsigned int output_type);
+
+	void EnableTcpOutput();
 
 	//This method writes current time in UTC format.
 	//Writes logs with given parameters.
@@ -94,9 +97,12 @@ public:
 			fprintf(pfile_,"%s",str.c_str());
 		}
 		if((kUdp &(output_type_))>>2){
-			sendto(sockfd_, (const char *)str.c_str(), strlen(str.c_str()),
-				MSG_CONFIRM, (const struct sockaddr *) &servaddr_,
-				sizeof(servaddr_));
+			sendto(udp_sockfd_, (const char *)str.c_str(), strlen(str.c_str()),
+				MSG_CONFIRM, (const struct sockaddr *) &udp_servaddr_,
+				sizeof(udp_servaddr_));
+		}
+		if((kTcp &(output_type_))>>3){
+			write(tcp_connfd_,(const char *)str.c_str(), strlen(str.c_str()));
 		}
 	}
 
@@ -106,10 +112,10 @@ private:
 	const char* pfilepath_ = nullptr;
 	FILE* pfile_ = nullptr;
 	std::mutex log_mutex_;
-	int sockfd_;
-	struct sockaddr_in servaddr_;
+	int udp_sockfd_,tcp_sockfd_,tcp_connfd_;
+	struct sockaddr_in udp_servaddr_;
 	unsigned int output_type_;
-	struct json_object *pport_,*pserverip_,*pfilepath_json_;
+	struct json_object *pudp_port_,*pudp_serverip_,*pfilepath_json_,*ptcp_port_,*ptcp_serverip_;
 
 	//We have singleton design pattern, there will be just 1 instance, class objects should not be created outside class.
 	Logger() {
@@ -118,6 +124,7 @@ private:
 	//Destructor closes the file.
 	~Logger()
 	{
+		close(tcp_sockfd_);
 		FreeFile();
 	}
 

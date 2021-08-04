@@ -29,7 +29,7 @@ void SetSWVersion(unsigned int new_major,unsigned int new_minor,unsigned int new
 int main(){
 	static int thread_run_duration=20;
 	static int number_of_threads=10;
-	unsigned int output_type=7;
+	unsigned int output_type=13;
 
 	Logger::get_instance().Init(output_type);
 
